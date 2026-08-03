@@ -17,7 +17,7 @@ c에서는 함수의 매개변수로 queueType이라는 포인터를 보내서 �
         data[rear] = item;
     }
 ```
-미리 rear위치를 옮겼는데 template를 쓰면서 std나 클래스를 복사하는 과정에서 복사생성 중 에러나면 rear는 빈공간 가리키게됨
+미리 rear위치를 옮겼는데 template를 쓰면서 std나 클래git commit -m "feat: Queue 구현 +스를 복사하는 과정에서 복사생성 중 에러나면 rear는 빈공간 가리키게됨
 data와 같은 자료형 temp같은걸로 미리 확인하고 오류없으면 rear위치 옮기기
 
 
@@ -42,9 +42,31 @@ C++ 템플릿은 T가 뭐가 될지 미리 알 수 없다. 생성자·복사 생
 스택과 동일하게: void dequeue() + peek() 분리
 peek을 만든 이유가 사실상 없다고 봄 근데 이렇게 하면 일관성 지켜지면서 안정성도 생김
 
-placement new?
+placement new? 이번에 알게도도니것
 
 
 스택과 달리 헤더파일에서 간단한 출력문 만들예정 
 iostream쓰면 무거워서 헤더파일 분리하는 이유없음
 opretor로 출력 구현
+
+0803
+위험성 커밋이 작동한뒤에 확정넣어야ㅏㅎㅁ
+unique_ptr이라는게 존재 자동으로 delete해줌
+근데 지금은 한번 throw catch로 구현
+
+
+<ostream>으로 헤더파일에서 출력구현한것과 별개로 .cpp 실제 구현부에서 자료형에 맞는 operator<< friend로 추가해야함
+제네릭 컨테이너를 쓸 때 원소 타입한테 요구하는 조건(constraint)
+
+
+지금은 매크로썼는데 나중에 실무에서는 매크로를 남발하면 똑같은 이름일때 문제 생길거같음
+// 방법 1: constexpr — 스코프 있음, 타입 있음
+class CustomQueue {
+    static constexpr int CAPACITY = 5;  // 이 클래스 안에서만 유효, CustomQueue::CAPACITY로 명시 가능
+};
+
+// 방법 2: non-type template parameter — 인스턴스마다 다른 크기도 가능
+template <typename T, std::size_t Capacity = 50>
+class CustomQueue { ... };
+
+근데 만약 똑같은 거 2개가 필요한게 아닌 객체의 소유권만 바꾸는 or 이전하는 경우는 하나하나 복사할 필요가 없지 않나? 그냥 포인터 새로 붙이고 원래서 nullptr로 없애면 되지않나
