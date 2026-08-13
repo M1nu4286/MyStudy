@@ -1,5 +1,7 @@
 # 자료구조 C→C++ 변환 devlog — 스택
 
+# 1차 리뷰 (2026-07-28)
+
 ## Critical 1: exit() → 예외처리 전환 (동적배열 스택)
 
 ### 원본 (C)
@@ -58,7 +60,10 @@ realloc 방식은 반환값을 즉시 원본 포인터에 덮어써서 실패 �
 순서를 강제하므로 이 문제가 구조적으로 발생할 수 없다.
 
 ### 결론
-new[]+복사 방식은 realloc과 달리 실패 시 원본 포인터를 잃어버릴 위험이 구조적으로 없다. 
+new[]+복사 방식은 realloc과 달리 실패 시 원본 포인터를 잃어버릴 위험이 구조적으로 없다.
+(참고: 원래 별도 항목으로 뒀던 "오버플로우 처리 시 realloc 실패 체크 누락"도
+이 구조 변경으로 동시에 해결됨 — new[]가 실패하면 언어 차원에서 즉시 예외가
+던져지므로 "체크 누락"이라는 상황 자체가 성립하지 않음)
 
 -----
 
@@ -72,12 +77,13 @@ template<typename T> class CustomStack
 - std::string으로 확장(capacity *2) 로직까지 타입 무관하게 동작함을 확인
   (복사 생성자/대입 연산자가 int 전제로 잘못 짜였다면 string에서 드러났을 것 — 문제없음)
 
+-----
 
-## Critical 5 : 복사 생성자 / 복사 대입 연산자 부재
+## Critical 5: 복사 생성자 / 복사 대입 연산자 부재 (Rule of Three)
 
 ### 배경
 CustomStack에 소멸자를 직접 정의(delete[] data)한 순간, 컴파일러가 자동 생성하는
-기본 복사 생성자/대입 연산자는 얕은 복사(shallow copy)를 한다는 문제가 남는다.
+기본 복사 생성자/대입 연산자는 얕은 복사를 한다는 문제가 남는다.
 
 ### 문제 재현
 CustomStack<int> s1;
@@ -99,7 +105,7 @@ CustomStack(const CustomStack& Other) {
     for (int i = 0; i <= top; i++) data[i] = Other.data[i];  // 깊은 복사
 }
 
-### 구현 — 복사 대입 연산자
+### 구현 — 복사 대입 연산자 (1차 리뷰 당시 버전 — 2차 리뷰에서 순서 재수정됨, Critical 7 참고)
 CustomStack& operator=(const CustomStack& Other) {
     if (this != &Other) {           // self-assignment 방어
         delete[] data;               // 기존 자원 해제 (안 하면 메모리 누수)
@@ -118,7 +124,6 @@ CustomStack& operator=(const CustomStack& Other) {
    this는 포인터, Other는 참조라 타입이 안 맞음 → this != &Other로 수정
 3. 대입 연산자에서 return *this 누락 → 시그니처(CustomStack&)와 안 맞아 컴파일 에러
 
-
 ### 검증 (완료) — test_stack_critical5.cpp
 $ ./stack_critical_5
 s2: 2 1
@@ -135,27 +140,115 @@ ERROR SUMMARY: 0 errors from 0 contexts
 → 복사 생성자/대입 연산자의 깊은 복사, self-assignment 방어가
   double free나 메모리 누수 없이 정상 동작함을 증명
 
+-----
+-----
+
+# 2차 리뷰 (2026-07-29)
+
+### 배경
+1차 리뷰는 "정상 실행 경로"에서의 메모리 안전성(누수, double free)에 집중했음. "연산 도중 예외가 발생했을 때의 안전성"
+(강한 예외 보장, Strong Exception Guarantee)은 점검하지 않았다는 한계를 발견함.
+
+## Critical 6: pop() 값 반환 시 복사 생성자 예외로 인한 데이터 증발
+
+### 문제
+return data[top--]; 에서 T의 복사 생성자가 힙 할당 실패 등으로
+예외를 던지면, top은 이미 감소했는데 값은 호출자에게 전달되지 못함.
+해당 원소는 스택에서도 나갔고 호출자에게도 안 넘어가 증발함
+(int처럼 복사에 힙 할당이 없는 타입에서는 발생 불가능한 문제).
+
+### 전환
+void pop()
+{
+    if (is_empty())
+        throw std::out_of_range("스택이 비어있음");
+    top--;
+}
+값 조회는 peek()으로 완전히 분리 (std::stack과 동일한 인터페이스 관례).
+
+### 부수 변경
+peek()+pop() 인터페이스 전환에 따라 stack_critical_4.cpp,
+stack_critical_5.cpp의 pop() 값 사용부 전부 peek()+pop()으로 수정.
+
+### 검증 (완료)
+재컴파일 및 실행 결과 기존과 동일한 값 출력 확인
+(int/double/string peek 값, Rule of Three 복사/대입 결과 모두 일치)
 
 
+-----
+-----
+
+## Design 1: peek()이 값 복사(T) 반환
+### 문제
+값을 엿보기만 하는 함수인데 무조건 T를 복사해서 반환함.
+T가 크기가 큰 구조체나 긴 문자열이면 단순 조회만 해도 복사 비용 발생.
+
+### 개선 방향 (미적용)
+const T& 반환으로 변경 시 복사 없이 조회 가능.
+그런데 이러면 push시 is_full로 배열 크기 2배로 늘릴 때 기존배열 없애고 새배열 만드는 과정에서 댕글링 참조 발생
+
+-----
+
+# Performance (구조는 맞지만 효율성 개선 여지가 있는 지점)
+
+## Performance 1: push()의 move semantics 부재
+### 문제
+void push(const T &item) — 임시 객체(rvalue)를 넘겨도 const T&가 받아
+함수 내부에서 lvalue로 취급되어 항상 복사 대입이 발생함.
+실제로 Watched 클래스로 재현: 임시 객체 push 시 이동 생성자가 아닌
+복사 대입이 호출됨을 실행으로 확인.
+
+### std::stack과의 차이
+std::stack은 push(const T&)와 push(T&&) 두 오버로드를 제공하여
+임시 객체는 이동 생성자/이동 대입으로 처리 — 불필요한 deep copy 회피.
+
+### 적용 범위 판단
+기본 자료형(int, double 등)은 복사/이동 비용이 사실상 동일하여
+move semantics 부재가 성능에 영향을 주지 않음. 힙 자원을 보유한
+타입(std::string, 커스텀 객체 등)에서만 의미 있음.
+
+→ Track 2 벤치마크 스코프 정리:
+  - CustomStack<int> vs std::stack<int>: 재할당 전략/캐시 미스 비교 목적
+  - CustomStack<std::string> vs std::stack<std::string>:
+    위 항목 + move semantics 부재로 인한 복사 오버헤드까지 관찰 가능
+
+### 결정
+push(T&&) 오버로드는 지금 추가하지 않고, string 벤치마크 결과에서
+복사 오버헤드가 실제로 관찰되면 그때 추가 후 개선 전/후 비교하는 방식으로 진행.
+
+## Performance 2: push() 재할당 시 std::move 미사용
+### 문제
+용량 초과로 배열 재할당 시 newData[i] = data[i]로 복사함.
+기존 배열(data)은 이 루프 직후 delete[]로 버려질 것이므로,
+굳이 복사할 필요 없이 std::move(data[i])로 이동하면 됨.
+
+### 개선 방향 (미적용)
+newData[i] = std::move(data[i]); 로 변경 시 힙 자원 보유 타입에서
+재할당 속도 개선 예상 (가설 — 벤치마크로 검증 필요).
+
+-----
+-----
 
 
+# 새로 알게된 C++ 표준 클래스/개념
 
+## std::string
+C에서 char name[100](고정배열)이나 char*(포인터)로 관리하던 걸
+동적배열 및 길이/크기 연산이 용이하게 대체. 소멸자 포함해서
+free() 안 써도 누수 걱정 없음.
 
+## std::move
+리소스(힙 버퍼 등)의 소유권을 복사 없이 이전시키는 것. 임시 객체나
+더 이상 안 쓸 값을 복사하지 않고 그대로 넘겨서 불필요한 deep copy를 없앤다.
+(미완성 — Performance 1, 2 실제 구현 시 다시 정리 예정)
 
+## std::out_of_range
+<stdexcept> 헤더의 표준 예외 클래스. "인덱스나 범위를 벗어난 접근"을
+표현하는 용도로 표준에서 이미 정의해둔 타입. std::vector::at(),
+std::string::at() 등도 이 예외를 던지므로, 직접 만든 커스텀 예외
+클래스보다 STL과 같은 언어로 말할 수 있다는 장점이 있음.
 
-새로 알게된 c++ 표준클래스 
-std::string 
-c에서 char name[100](고정배열)나 char*(포인터)로 관리하던 걸 동적배열 및 길이,크기 연산 용이
-소멸자 포함해서 free()안써도 누수걱정X
-
-std::move
-n을 가리
-
-
-std::outofrange
-
-
-
-
-stack_unwind_test
-정순으로 생성후 역순으로 소멸되야하는데 exit쓰는순간 pop에서 끝나버리고 나머지 정상 소멸 X
+## Stack Unwinding (검증 완료 — Critical 1 참고)
+정순으로 생성 후 역순으로 소멸되어야 하는데, exit() 사용 시
+pop()에서 프로세스가 즉시 끝나버려 나머지 소멸자가 정상 호출되지 않음.
+(Critical 1의 검증 내용과 동일 — 상세 내용은 Critical 1 참고)

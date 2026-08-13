@@ -1,9 +1,9 @@
-#ifndef CUSTOM_QUEUE_H
-#define CUSTOM_QUEUE_H
+#ifndef CUSTOM_DEQUE_H
+#define CUSTOM_DEQUE_H
 #include <stdexcept>
 #include <ostream>
 template <typename T>
-class CustomQueue
+class CustomDeque
 {
 private:
     T *data;
@@ -19,23 +19,21 @@ private:
     }
 
 public:
-    CustomQueue()
+    CustomDeque()
     {
         front = rear = 0;
         data = new T[capacity];
     }
-    ~CustomQueue()
+    ~CustomDeque()
     {
         delete[] data;
     }
-    CustomQueue(CustomQueue
-                    &&Other) noexcept
+    CustomDeque(CustomDeque &&Other) noexcept
         : data(Other.data), front(Other.front), rear(Other.rear)
     {
         Other.data = nullptr;
     }
-    CustomQueue &operator=(CustomQueue
-                               &&Other) noexcept
+    CustomDeque &operator=(CustomDeque &&Other) noexcept
     {
         if (this != &Other) // 자기 자신한테 이동 대입하는 경우 방지
         {
@@ -47,8 +45,7 @@ public:
         }
         return *this;
     }
-    CustomQueue(const CustomQueue
-                    &Other)
+    CustomDeque(const CustomDeque &Other)
     {
         front = Other.front;
         rear = Other.rear;
@@ -71,8 +68,7 @@ public:
             throw;
         }
     }
-    CustomQueue &operator=(const CustomQueue
-                               &Other)
+    CustomDeque &operator=(const CustomDeque &Other)
     {
         if (this != &Other)
         {
@@ -102,9 +98,9 @@ public:
         }
         return *this;
     }
-    friend std::ostream &operator<<(std::ostream &os, const CustomQueue<T> &q)
+    friend std::ostream &operator<<(std::ostream &os, const CustomDeque<T> &q)
     {
-        os << "QUEUE(front=" << q.front << " rear=" << q.rear << ") = ";
+        os << "DEQUE(front=" << q.front << " rear=" << q.rear << ") = ";
         if (!q.is_empty())
         {
             int i = q.front;
@@ -120,25 +116,44 @@ public:
         return os;
     }
 
-    void enqueue(const T &item)
+    void add_front(const T &item)
     {
         if (is_full())
-            throw std::out_of_range("큐가 포화상태");
+            throw std::out_of_range("데크가 포화상태");
+        data[front] = item;
+        front = (front - 1 + capacity) % capacity;
+    }
+    void add_rear(const T &item)
+    {
+        if (is_full())
+            throw std::out_of_range("데크가 포화상태");
         int tempRear = (rear + 1) % capacity;
         data[tempRear] = item;
         rear = tempRear;
     }
-    void dequeue()
+    void delete_front()
     {
         if (is_empty())
-            throw std::out_of_range("큐가 공백상태");
+            throw std::out_of_range("데크가 공백상태");
         front = (front + 1) % capacity;
     }
-    T peek() const
+    void delete_rear()
     {
         if (is_empty())
-            throw std::out_of_range("큐가 공백상태");
+            throw std::out_of_range("데크가 공백상태");
+        rear = (rear - 1 + capacity) % capacity;
+    }
+    T peek_front() const
+    {
+        if (is_empty())
+            throw std::out_of_range("데크가 공백상태");
         return data[(front + 1) % capacity]; // 실제 front 원소 반환
+    }
+    T peek_rear() const
+    {
+        if (is_empty())
+            throw std::out_of_range("데크가 공백상태");
+        return data[rear];
     }
 };
 

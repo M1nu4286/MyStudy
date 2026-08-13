@@ -1,5 +1,8 @@
 STACK/stack_critical_1_2
 STACK/stack_critical_4
 STACK/stack_critical_5
+QUEUE/test
+QUEUE/copyMove
+LIST/TestLD
 *.o
 *.out

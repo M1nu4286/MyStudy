@@ -11,9 +11,17 @@ int main() {
     s3 = s1;                     // 복사 대입 연산자
     s1 = s1;                     // self-assignment 방어 확인
 
-    std::cout << "s2: " << s2.pop() << " " << s2.pop() << "\n";
-    std::cout << "s3: " << s3.pop() << " " << s3.pop() << "\n";
-    std::cout << "s1: " << s1.pop() << " " << s1.pop() << "\n";
+    std::cout << "s2: " << s2.peek(); s2.pop();
+    std::cout << " " << s2.peek(); s2.pop();
+    std::cout << "\n";
 
-    return 0;  // s1, s2, s3 전부 소멸 — valgrind로 double free 없는지 확인
+    std::cout << "s3: " << s3.peek(); s3.pop();
+    std::cout << " " << s3.peek(); s3.pop();
+    std::cout << "\n";
+
+    std::cout << "s1: " << s1.peek(); s1.pop();
+    std::cout << " " << s1.peek(); s1.pop();
+    std::cout << "\n";
+
+    return 0;
 }

@@ -18,7 +18,7 @@ public:
         top = -1;
         capacity = 1;
         data = new T[capacity];
-    };
+    }
     CustomStack(const CustomStack &Other)
     {
         top = Other.top;
@@ -32,23 +32,24 @@ public:
     CustomStack &operator=(const CustomStack &Other)
     {
         if (this != &Other)
+    {
+        T *newData = new T[Other.capacity];   // 1. 먼저 새 걸 확보 (실패하면 여기서 예외, 기존 data는 안전)
+        for (int i = 0; i <= Other.top; i++)
         {
-            delete[] data;
-            top = Other.top;
-            capacity = Other.capacity;
-            data = new T[capacity];
-            for (int i = 0; i <= top; i++)
-            {
-                data[i] = Other.data[i];
-            }
+            newData[i] = Other.data[i];
         }
-        return *this;
+        delete[] data;          // 2. 새 게 성공했으니 이제 기존 거 지움
+        data = newData;         // 3. 교체
+        top = Other.top;
+        capacity = Other.capacity;
+    }
+    return *this;
     }
     // 소멸자: data 해제
     ~CustomStack()
     {
         delete[] data;
-    };
+    }
 
     void push(const T &item)
     {
@@ -66,11 +67,11 @@ public:
         }
         data[++top] = item;
     };
-    T pop()
+    void pop()
     {
         if (is_empty())
             throw std::out_of_range("스택이 비어있음");
-        return data[top--];
+        top--;
     };
     T peek() const
     {
